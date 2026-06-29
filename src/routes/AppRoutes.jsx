@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from '../components/layout/Layout'
 import ProtectedRoute from '../components/protected/ProtectedRoute'
 import Login from '../pages/Login'
-import Signup from '../pages/Signup'
 import SetPassword from '../pages/SetPassword'
 import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
@@ -34,7 +33,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      <Route path="/signup" element={<Navigate to="/login" replace />} />
       <Route path="/set-password/:token" element={<SetPassword />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password/:token" element={<ResetPassword />} />

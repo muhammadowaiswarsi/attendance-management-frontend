@@ -3,28 +3,6 @@ export const validateEmail = (email) => {
   return pattern.test(email)
 }
 
-export const validateSignupForm = ({ fullName, email, password }) => {
-  const errors = {}
-
-  if (!fullName?.trim()) {
-    errors.fullName = 'Full name is required'
-  }
-
-  if (!email?.trim()) {
-    errors.email = 'Email is required'
-  } else if (!validateEmail(email)) {
-    errors.email = 'Enter a valid email address'
-  }
-
-  if (!password) {
-    errors.password = 'Password is required'
-  } else if (password.length < 6) {
-    errors.password = 'Password must be at least 6 characters'
-  }
-
-  return errors
-}
-
 export const validateLoginForm = ({ email, password }) => {
   const errors = {}
 

@@ -48,11 +48,6 @@ const Login = () => {
     <AuthLayout
       title="Welcome Back"
       subtitle="Sign in to manage attendance and payroll"
-      footer={
-        <p>
-          Don&apos;t have an account? <AuthLink to="/signup">Create Account</AuthLink>
-        </p>
-      }
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         {error && <div className="alert alert--error">{error}</div>}
