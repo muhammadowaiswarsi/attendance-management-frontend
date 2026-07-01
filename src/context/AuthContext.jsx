@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchMe, loginRequest } from '../api/auth'
 import {
   clearAuthStorage,
@@ -6,15 +6,23 @@ import {
   getStoredUser,
   saveAuthStorage,
 } from '../utils/auth'
+import { isPublicAuthPath, setLoginInProgress } from '../utils/authSession'
 
 const AuthContext = createContext(null)
+
+const isAbortError = (error) =>
+  error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(getStoredUser())
   const [token, setToken] = useState(getStoredToken())
   const [loading, setLoading] = useState(true)
+  const initAbortRef = useRef(null)
 
   useEffect(() => {
+    const controller = new AbortController()
+    initAbortRef.current = controller
+
     const initAuth = async () => {
       const storedToken = getStoredToken()
       if (!storedToken) {
@@ -22,40 +30,78 @@ export const AuthProvider = ({ children }) => {
         return
       }
 
+      const onPublicAuthPage = isPublicAuthPath()
+
+      if (onPublicAuthPage) {
+        setLoading(false)
+      }
+
       try {
-        const { data } = await fetchMe()
+        const { data } = await fetchMe({ signal: controller.signal })
+        if (controller.signal.aborted) return
+
         setUser(data)
         setToken(storedToken)
         saveAuthStorage(storedToken, data)
-      } catch {
+      } catch (error) {
+        if (controller.signal.aborted || isAbortError(error)) return
+
         clearAuthStorage()
         setUser(null)
         setToken(null)
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted && !onPublicAuthPage) {
+          setLoading(false)
+        }
       }
     }
 
     initAuth()
+
+    return () => {
+      controller.abort()
+    }
   }, [])
 
   const login = async (email, password) => {
-    const { data } = await loginRequest(email, password)
-    const accessToken = data.access_token
+    initAbortRef.current?.abort()
 
-    saveAuthStorage(accessToken, null)
-    setToken(accessToken)
+    setLoginInProgress(true)
+    clearAuthStorage()
+    setUser(null)
+    setToken(null)
 
-    const meResponse = await fetchMe()
-    const userData = meResponse.data
+    try {
+      const { data } = await loginRequest(email, password)
+      const accessToken = data.access_token
 
-    setUser(userData)
-    saveAuthStorage(accessToken, userData)
+      saveAuthStorage(accessToken, null)
+      setToken(accessToken)
 
-    return userData
+      let meResponse
+      try {
+        meResponse = await fetchMe()
+      } catch {
+        clearAuthStorage()
+        setUser(null)
+        setToken(null)
+        const profileError = new Error('Could not load your profile. Please try again.')
+        profileError.code = 'PROFILE_LOAD_FAILED'
+        throw profileError
+      }
+
+      const userData = meResponse.data
+      setUser(userData)
+      saveAuthStorage(accessToken, userData)
+
+      return userData
+    } finally {
+      setLoginInProgress(false)
+    }
   }
 
   const logout = () => {
+    initAbortRef.current?.abort()
     clearAuthStorage()
     setUser(null)
     setToken(null)

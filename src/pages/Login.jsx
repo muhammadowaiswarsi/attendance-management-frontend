@@ -38,7 +38,21 @@ const Login = () => {
       const user = await login(email.trim(), password)
       navigate(getDashboardPath(user.role))
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.')
+      if (err.code === 'PROFILE_LOAD_FAILED') {
+        setError(err.message)
+      } else if (err.response?.status === 401) {
+        setError('Incorrect email or password.')
+      } else if (err.response?.status === 403) {
+        setError(err.response?.data?.detail || 'Access denied. Please contact your administrator.')
+      } else if (err.response?.data?.detail) {
+        setError(
+          typeof err.response.data.detail === 'string'
+            ? err.response.data.detail
+            : 'Login failed. Please try again.'
+        )
+      } else {
+        setError('Unable to sign in right now. Please check your connection and try again.')
+      }
     } finally {
       setSubmitting(false)
     }

@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { getStoredToken, clearAuthStorage } from '../utils/auth'
+import { clearAuthStorage, getStoredToken } from '../utils/auth'
+import { isLoginInProgress } from '../utils/authSession'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
@@ -18,10 +19,20 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+const shouldClearAuthOn401 = (error) => {
+  if (isLoginInProgress()) return false
+  if (error.code === 'ERR_CANCELED') return false
+
+  const url = error.config?.url || ''
+  if (url.includes('/auth/login')) return false
+
+  return true
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && shouldClearAuthOn401(error)) {
       clearAuthStorage()
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
