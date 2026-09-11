@@ -14,6 +14,31 @@ export const formatCurrency = (amount) =>
 export const calcNetSalary = (basic, allowances, deductions) =>
   Number(basic || 0) + Number(allowances || 0) - Number(deductions || 0)
 
+export const calcNetSalaryFromFields = (fields = [], values = {}) =>
+  fields.reduce((total, field) => {
+    const amount = Number(values[field.fieldKey] || 0)
+    return field.category === 'deduction' ? total - amount : total + amount
+  }, 0)
+
+export const getPayslipLineItems = (payslip) => {
+  if (payslip?.fieldValues?.length) {
+    return {
+      earnings: payslip.fieldValues.filter((item) => item.category !== 'deduction'),
+      deductions: payslip.fieldValues.filter((item) => item.category === 'deduction'),
+    }
+  }
+
+  return {
+    earnings: [
+      { name: 'Basic Salary', value: payslip?.basicSalary },
+      { name: 'Allowances', value: payslip?.allowances },
+    ],
+    deductions: [
+      { name: 'Deductions', value: payslip?.deductions },
+    ],
+  }
+}
+
 export const formatPeriod = (month, year) =>
   `${MONTH_NAMES[month - 1] || month} ${year}`
 

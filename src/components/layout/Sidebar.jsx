@@ -9,6 +9,7 @@ const adminLinks = [
   { to: '/admin/holidays', label: 'Holidays', icon: '🎉' },
   { to: '/admin/payslips', label: 'Payslips', icon: '💰' },
   { to: '/admin/reports', label: 'Reports', icon: '📈' },
+  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
   { to: '/admin/profile', label: 'Profile', icon: '👤' },
 ]
 

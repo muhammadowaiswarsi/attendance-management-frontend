@@ -3421,3 +3421,61 @@ input {
   text-align: center;
   color: var(--text-muted);
 }
+
+/* Admin Settings */
+.settings-page {
+  width: 100%;
+}
+
+.settings-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-section__header h2 {
+  color: var(--primary-dark);
+  font-size: 1.15rem;
+  margin-bottom: 0.35rem;
+}
+
+.settings-section__header p {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  max-width: 620px;
+  line-height: 1.5;
+}
+
+.settings-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-top: -0.25rem;
+}
+
+.payslip-field-order {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.holiday-table td .badge {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.create-payslip__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .settings-section__header {
+    flex-direction: column;
+  }
+
+  .settings-section__header .btn {
+    width: 100%;
+  }
+}

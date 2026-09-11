@@ -9,6 +9,14 @@ export const fromApiResponse = (row) => ({
   basicSalary: row.basic_salary,
   allowances: row.allowances,
   deductions: row.deductions,
+  fieldValues: (row.field_values || []).map((item) => ({
+    fieldId: item.field_id,
+    fieldKey: item.field_key,
+    name: item.name,
+    fieldType: item.field_type,
+    category: item.category,
+    value: item.value,
+  })),
   netSalary: row.net_salary,
   pdfPath: row.pdf_path,
   sentAt: row.sent_at,
@@ -41,13 +49,22 @@ export const getMyPayslips = async () => {
 }
 
 export const createPayslip = async (form) => {
+  const fieldValues = form.fieldValues || []
+  const byKey = Object.fromEntries(
+    fieldValues.map((item) => [item.fieldKey, Number(item.value || 0)])
+  )
+
   const { data } = await api.post('/payslips', {
     employee_id: Number(form.employeeId),
     month: Number(form.month),
     year: Number(form.year),
-    basic_salary: Number(form.basicSalary),
-    allowances: Number(form.allowances || 0),
-    deductions: Number(form.deductions || 0),
+    basic_salary: Number(byKey.basic_salary ?? form.basicSalary),
+    allowances: Number(byKey.allowances ?? form.allowances ?? 0),
+    deductions: Number(byKey.deductions ?? form.deductions ?? 0),
+    field_values: fieldValues.map((item) => ({
+      field_key: item.fieldKey,
+      value: Number(item.value || 0),
+    })),
   })
   return fromApiResponse(data)
 }

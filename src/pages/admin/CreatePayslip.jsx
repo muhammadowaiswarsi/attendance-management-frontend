@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getEmployees } from '../../api/employees'
+import { getActivePayslipFields } from '../../api/payslipFields'
 import { createPayslip } from '../../api/payslips'
 import CreatePayslipForm from '../../components/payslips/CreatePayslipForm'
 import PageHeader from '../../components/ui/PageHeader'
@@ -10,12 +11,29 @@ const AdminCreatePayslip = () => {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [employees, setEmployees] = useState([])
+  const [fields, setFields] = useState([])
+  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    getEmployees()
-      .then(setEmployees)
-      .catch(() => showToast('Failed to load employees', 'error'))
+    let cancelled = false
+    setLoading(true)
+    Promise.all([getEmployees(), getActivePayslipFields()])
+      .then(([employeeRows, fieldRows]) => {
+        if (cancelled) return
+        setEmployees(employeeRows)
+        setFields(fieldRows)
+      })
+      .catch(() => {
+        if (cancelled) return
+        showToast('Failed to load payslip form', 'error')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [showToast])
 
   const handleSubmit = async (form) => {
@@ -40,11 +58,19 @@ const AdminCreatePayslip = () => {
       />
 
       <div className="employees-panel">
-        <CreatePayslipForm
-          employees={employees}
-          onSubmit={handleSubmit}
-          submitting={submitting}
-        />
+        {loading ? (
+          <div className="employee-table-loading">
+            <div className="spinner" />
+            <p>Loading form...</p>
+          </div>
+        ) : (
+          <CreatePayslipForm
+            employees={employees}
+            fields={fields}
+            onSubmit={handleSubmit}
+            submitting={submitting}
+          />
+        )}
       </div>
     </div>
   )

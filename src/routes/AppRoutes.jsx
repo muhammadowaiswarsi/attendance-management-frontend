@@ -19,6 +19,7 @@ import AdminReportsMonthly from '../pages/admin/ReportsMonthly'
 import AdminReportsCompany from '../pages/admin/ReportsCompany'
 import AdminReportsDepartment from '../pages/admin/ReportsDepartment'
 import AdminProfile from '../pages/admin/Profile'
+import AdminSettings from '../pages/admin/Settings'
 import EmployeeDashboard from '../pages/employee/Dashboard'
 import EmployeeAttendance from '../pages/employee/Attendance'
 import EmployeePayslips from '../pages/employee/Payslips'
@@ -58,6 +59,7 @@ const AppRoutes = () => {
           <Route path="reports/monthly" element={<AdminReportsMonthly />} />
           <Route path="reports/company" element={<AdminReportsCompany />} />
           <Route path="reports/department" element={<AdminReportsDepartment />} />
+          <Route path="settings" element={<AdminSettings />} />
           <Route path="profile" element={<AdminProfile />} />
           <Route path="*" element={<NotFound />} />
         </Route>

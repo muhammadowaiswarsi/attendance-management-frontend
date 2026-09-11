@@ -3,6 +3,7 @@ import {
   formatAmount,
   formatPayslipMonth,
   formatPayslipNumber,
+  getPayslipLineItems,
   getPayslipStatus,
 } from '../../utils/payslips'
 
@@ -37,6 +38,7 @@ const PayslipDetails = ({
   }
 
   const status = getPayslipStatus(payslip.sentAt)
+  const { earnings, deductions } = getPayslipLineItems(payslip)
 
   return (
     <div className="payslip-document-wrap">
@@ -81,18 +83,19 @@ const PayslipDetails = ({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Basic Salary</td>
-                  <td>{formatAmount(payslip.basicSalary)}</td>
-                </tr>
-                <tr>
-                  <td>Bonus</td>
-                  <td>{formatAmount(payslip.allowances)}</td>
-                </tr>
-                <tr>
-                  <td>Over Time</td>
-                  <td>-</td>
-                </tr>
+                {earnings.length ? (
+                  earnings.map((item) => (
+                    <tr key={item.fieldKey || item.name}>
+                      <td>{item.name}</td>
+                      <td>{formatAmount(item.value)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td>—</td>
+                    <td>-</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -105,18 +108,19 @@ const PayslipDetails = ({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Tax Deduction</td>
-                  <td>{formatAmount(payslip.deductions)}</td>
-                </tr>
-                <tr>
-                  <td>PF</td>
-                  <td>-</td>
-                </tr>
-                <tr>
-                  <td>Loan</td>
-                  <td>-</td>
-                </tr>
+                {deductions.length ? (
+                  deductions.map((item) => (
+                    <tr key={item.fieldKey || item.name}>
+                      <td>{item.name}</td>
+                      <td>{formatAmount(item.value)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td>—</td>
+                    <td>-</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

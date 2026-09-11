@@ -2,20 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   MONTH_OPTIONS,
-  calcNetSalary,
+  calcNetSalaryFromFields,
   formatCurrency,
 } from '../../utils/payslips'
 
-const CreatePayslipForm = ({ employees = [], onSubmit, submitting }) => {
+const defaultValueForField = (field) => (field.fieldKey === 'basic_salary' ? '' : '0')
+
+const CreatePayslipForm = ({ employees = [], fields = [], onSubmit, submitting }) => {
   const now = new Date()
   const [form, setForm] = useState({
     employeeId: '',
     month: String(now.getMonth() + 1),
     year: String(now.getFullYear()),
-    basicSalary: '',
-    allowances: '0',
-    deductions: '0',
   })
+  const [fieldValues, setFieldValues] = useState({})
   const [errors, setErrors] = useState({})
 
   const activeEmployees = useMemo(
@@ -23,26 +23,42 @@ const CreatePayslipForm = ({ employees = [], onSubmit, submitting }) => {
     [employees]
   )
 
+  useEffect(() => {
+    setFieldValues((prev) => {
+      const next = {}
+      fields.forEach((field) => {
+        next[field.fieldKey] =
+          prev[field.fieldKey] ?? defaultValueForField(field)
+      })
+      return next
+    })
+  }, [fields])
+
   const netSalary = useMemo(
-    () => calcNetSalary(form.basicSalary, form.allowances, form.deductions),
-    [form.basicSalary, form.allowances, form.deductions]
+    () => calcNetSalaryFromFields(fields, fieldValues),
+    [fields, fieldValues]
   )
 
   useEffect(() => {
     if (!form.employeeId) return
     const employee = activeEmployees.find((e) => String(e.id) === form.employeeId)
-    if (employee?.salary) {
-      setForm((prev) => ({
+    if (employee?.salary != null && fields.some((field) => field.fieldKey === 'basic_salary')) {
+      setFieldValues((prev) => ({
         ...prev,
-        basicSalary: String(employee.salary),
+        basic_salary: String(employee.salary),
       }))
     }
-  }, [form.employeeId, activeEmployees])
+  }, [form.employeeId, activeEmployees, fields])
 
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }))
+  }
+
+  const handleFieldChange = (fieldKey, value) => {
+    setFieldValues((prev) => ({ ...prev, [fieldKey]: value }))
+    if (errors[fieldKey]) setErrors((prev) => ({ ...prev, [fieldKey]: '' }))
   }
 
   const handleSubmit = (e) => {
@@ -51,21 +67,43 @@ const CreatePayslipForm = ({ employees = [], onSubmit, submitting }) => {
     if (!form.employeeId) nextErrors.employeeId = 'Employee is required'
     if (!form.month) nextErrors.month = 'Month is required'
     if (!form.year) nextErrors.year = 'Year is required'
-    if (!form.basicSalary || Number(form.basicSalary) <= 0) {
-      nextErrors.basicSalary = 'Basic salary must be greater than 0'
+
+    fields.forEach((field) => {
+      const raw = fieldValues[field.fieldKey]
+      const amount = Number(raw)
+      if (raw === '' || Number.isNaN(amount)) {
+        nextErrors[field.fieldKey] = `${field.name} is required`
+        return
+      }
+      if (field.fieldKey === 'basic_salary' && amount <= 0) {
+        nextErrors[field.fieldKey] = 'Basic salary must be greater than 0'
+        return
+      }
+      if (amount < 0) {
+        nextErrors[field.fieldKey] = `${field.name} cannot be negative`
+      }
+    })
+
+    if (netSalary <= 0) {
+      nextErrors.netSalary = 'Net salary must be greater than 0'
     }
-    if (Number(form.allowances) < 0) nextErrors.allowances = 'Allowances cannot be negative'
-    if (Number(form.deductions) < 0) nextErrors.deductions = 'Deductions cannot be negative'
-    if (netSalary <= 0) nextErrors.deductions = 'Net salary must be greater than 0'
 
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
       return
     }
-    onSubmit(form)
+
+    onSubmit({
+      ...form,
+      fieldValues: fields.map((field) => ({
+        fieldKey: field.fieldKey,
+        value: Number(fieldValues[field.fieldKey] || 0),
+      })),
+    })
   }
 
   const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]
+  const amountFields = fields.filter((field) => field.fieldType === 'amount')
 
   return (
     <div className="create-payslip">
@@ -125,80 +163,68 @@ const CreatePayslipForm = ({ employees = [], onSubmit, submitting }) => {
               ))}
             </select>
           </div>
-
-          <div className="form-group">
-            <label htmlFor="basicSalary">Basic Salary *</label>
-            <input
-              id="basicSalary"
-              name="basicSalary"
-              type="number"
-              min="1"
-              step="1"
-              value={form.basicSalary}
-              onChange={handleChange}
-              className={errors.basicSalary ? 'input--error' : ''}
-              placeholder="50000"
-            />
-            {errors.basicSalary && <span className="field-error">{errors.basicSalary}</span>}
-          </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="allowances">Allowances</label>
-            <input
-              id="allowances"
-              name="allowances"
-              type="number"
-              min="0"
-              step="1"
-              value={form.allowances}
-              onChange={handleChange}
-              className={errors.allowances ? 'input--error' : ''}
-            />
-            {errors.allowances && <span className="field-error">{errors.allowances}</span>}
+        {amountFields.length > 0 && (
+          <div className="create-payslip__fields">
+            {Array.from({ length: Math.ceil(amountFields.length / 2) }, (_, rowIndex) => {
+              const rowFields = amountFields.slice(rowIndex * 2, rowIndex * 2 + 2)
+              return (
+                <div className="form-row" key={rowFields.map((field) => field.id).join('-')}>
+                  {rowFields.map((field) => (
+                    <div className="form-group" key={field.id}>
+                      <label htmlFor={`field-${field.fieldKey}`}>
+                        {field.name}
+                        {field.fieldKey === 'basic_salary' ? ' *' : ''}
+                      </label>
+                      <input
+                        id={`field-${field.fieldKey}`}
+                        name={field.fieldKey}
+                        type="number"
+                        min={field.fieldKey === 'basic_salary' ? '1' : '0'}
+                        step="1"
+                        value={fieldValues[field.fieldKey] ?? ''}
+                        onChange={(event) => handleFieldChange(field.fieldKey, event.target.value)}
+                        className={errors[field.fieldKey] ? 'input--error' : ''}
+                        placeholder="0"
+                      />
+                      {errors[field.fieldKey] && (
+                        <span className="field-error">{errors[field.fieldKey]}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
           </div>
-
-          <div className="form-group">
-            <label htmlFor="deductions">Deductions</label>
-            <input
-              id="deductions"
-              name="deductions"
-              type="number"
-              min="0"
-              step="1"
-              value={form.deductions}
-              onChange={handleChange}
-              className={errors.deductions ? 'input--error' : ''}
-            />
-            {errors.deductions && <span className="field-error">{errors.deductions}</span>}
-          </div>
-        </div>
+        )}
 
         <div className="payslip-calc">
-          <div className="payslip-calc__row">
-            <span>Basic Salary</span>
-            <strong>{formatCurrency(form.basicSalary || 0)}</strong>
-          </div>
-          <div className="payslip-calc__row">
-            <span>+ Allowances</span>
-            <strong>{formatCurrency(form.allowances || 0)}</strong>
-          </div>
-          <div className="payslip-calc__row">
-            <span>− Deductions</span>
-            <strong>{formatCurrency(form.deductions || 0)}</strong>
-          </div>
+          {fields.map((field) => (
+            <div className="payslip-calc__row" key={field.id}>
+              <span>
+                {field.category === 'deduction' ? '− ' : field.fieldKey === 'basic_salary' ? '' : '+ '}
+                {field.name}
+              </span>
+              <strong>{formatCurrency(fieldValues[field.fieldKey] || 0)}</strong>
+            </div>
+          ))}
           <div className="payslip-calc__row payslip-calc__row--total">
             <span>Net Salary</span>
             <strong>{formatCurrency(netSalary)}</strong>
           </div>
+          {errors.netSalary && <span className="field-error">{errors.netSalary}</span>}
         </div>
 
         <div className="create-payslip__actions">
           <Link to="/admin/payslips" className="btn btn--outline">
             Cancel
           </Link>
-          <button type="submit" className="btn btn--primary" disabled={submitting}>
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={submitting || fields.length === 0}
+          >
             {submitting ? 'Creating...' : 'Create Payslip'}
           </button>
         </div>
