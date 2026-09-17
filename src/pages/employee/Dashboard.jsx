@@ -89,7 +89,9 @@ const EmployeeDashboard = () => {
         <div className="dashboard-panel">
           <div className="dashboard-panel__header">
             <h3>My Payslips</h3>
-            <span className="dashboard-panel__meta">Latest 3</span>
+            {payslips.length > 0 && (
+              <span className="dashboard-panel__meta">Latest 3</span>
+            )}
           </div>
           <PayslipPreview payslips={payslips} />
         </div>

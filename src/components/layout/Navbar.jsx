@@ -9,7 +9,7 @@ const Navbar = ({ onMenuToggle }) => {
         <button type="button" className="navbar__menu-btn" onClick={onMenuToggle}>
           ☰
         </button>
-        <div>
+        <div className="navbar__titles">
           <h2>{role === 'admin' ? 'Admin Panel' : 'Employee Portal'}</h2>
           <p>Welcome back, {user?.full_name}</p>
         </div>

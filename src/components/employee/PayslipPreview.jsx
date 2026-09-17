@@ -10,7 +10,7 @@ const PayslipPreview = ({ payslips = [] }) => {
 
   if (preview.length === 0) {
     return (
-      <div className="dashboard-table__empty dashboard-table__empty--panel">
+      <div className="dashboard-panel-empty">
         No payslips available yet.
       </div>
     )
