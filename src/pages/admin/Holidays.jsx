@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   createHoliday,
   deleteHoliday,
@@ -10,14 +10,14 @@ import HolidayTable from '../../components/holidays/HolidayTable'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
 import { getYearOptions, sortHolidaysByDate } from '../../utils/holidays'
+import { CACHE_KEYS, invalidateAfterHolidayChange } from '../../utils/pageCache'
 
 const AdminHolidays = () => {
   const { showToast } = useToast()
   const yearOptions = getYearOptions()
 
-  const [holidays, setHolidays] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [year, setYear] = useState(String(new Date().getFullYear()))
@@ -29,21 +29,23 @@ const AdminHolidays = () => {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
 
-  const loadHolidays = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getHolidays(Number(year))
-      setHolidays(sortHolidaysByDate(data))
-    } catch {
-      showToast('Failed to load holidays', 'error')
-    } finally {
-      setLoading(false)
+  const { data: holidays = [], loading, reload } = useCachedResource(
+    CACHE_KEYS.holidays(year),
+    async () => {
+      try {
+        const data = await getHolidays(Number(year))
+        return sortHolidaysByDate(data)
+      } catch {
+        showToast('Failed to load holidays', 'error')
+        throw new Error('Failed to load holidays')
+      }
     }
-  }, [year, showToast])
+  )
 
-  useEffect(() => {
-    loadHolidays()
-  }, [loadHolidays])
+  const refreshAfterChange = async () => {
+    invalidateAfterHolidayChange()
+    await reload()
+  }
 
   const openAddModal = () => {
     setModalMode('add')
@@ -73,7 +75,7 @@ const AdminHolidays = () => {
         showToast('Holiday updated successfully')
       }
       setModalOpen(false)
-      await loadHolidays()
+      await refreshAfterChange()
     } catch (err) {
       const message =
         err.response?.data?.detail ||
@@ -93,7 +95,7 @@ const AdminHolidays = () => {
       showToast('Holiday deleted successfully')
       setDeleteOpen(false)
       setPendingDelete(null)
-      await loadHolidays()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete holiday'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')

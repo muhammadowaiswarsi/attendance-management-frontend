@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getEmployees } from '../../api/employees'
 import {
@@ -13,6 +13,12 @@ import PayslipTable from '../../components/payslips/PayslipTable'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import {
+  CACHE_KEYS,
+  cachedFetch,
+  invalidateAfterPayslipChange,
+} from '../../utils/pageCache'
 import { formatPeriod, paginate } from '../../utils/payslips'
 
 const PAGE_SIZE = 10
@@ -22,9 +28,6 @@ const AdminPayslips = () => {
   const { showToast } = useToast()
   const now = new Date()
 
-  const [payslips, setPayslips] = useState([])
-  const [employees, setEmployees] = useState([])
-  const [loading, setLoading] = useState(true)
   const [actionLoadingId, setActionLoadingId] = useState(null)
   const [deleteLoadingId, setDeleteLoadingId] = useState(null)
 
@@ -36,25 +39,21 @@ const AdminPayslips = () => {
   const [emailConfirm, setEmailConfirm] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [payslipData, employeeData] = await Promise.all([
-        getPayslips(),
-        getEmployees(),
-      ])
-      setEmployees(employeeData)
-      setPayslips(enrichWithEmployees(payslipData, employeeData))
-    } catch {
-      showToast('Failed to load payslips', 'error')
-    } finally {
-      setLoading(false)
+  const { data: payslips = [], loading, reload } = useCachedResource(
+    CACHE_KEYS.payslips,
+    async () => {
+      try {
+        const [payslipData, employeeData] = await Promise.all([
+          getPayslips(),
+          cachedFetch(CACHE_KEYS.employees, () => getEmployees()),
+        ])
+        return enrichWithEmployees(payslipData, employeeData)
+      } catch {
+        showToast('Failed to load payslips', 'error')
+        throw new Error('Failed to load payslips')
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  )
 
   useEffect(() => {
     setPage(1)
@@ -84,6 +83,11 @@ const AdminPayslips = () => {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
+  const refreshAfterChange = async () => {
+    invalidateAfterPayslipChange()
+    await reload()
+  }
+
   const handleDownload = async (payslip) => {
     setActionLoadingId(payslip.id)
     try {
@@ -107,7 +111,7 @@ const AdminPayslips = () => {
     try {
       await sendPayslipEmail(emailConfirm.id)
       showToast(`Payslip sent to ${emailConfirm.employeeName}`)
-      await loadData()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to send email'
       showToast(typeof message === 'string' ? message : 'Email failed', 'error')
@@ -130,7 +134,7 @@ const AdminPayslips = () => {
     try {
       await deletePayslip(payslip.id)
       showToast(`Payslip deleted for ${payslip.employeeName}`)
-      await loadData()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete payslip'
       showToast(typeof message === 'string' ? message : 'Delete failed', 'error')

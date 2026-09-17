@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getEmployees } from '../../api/employees'
 import { getMonthlyReport } from '../../api/reports'
@@ -7,14 +7,14 @@ import ReportFilters from '../../components/reports/ReportFilters'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 import { getDefaultMonthYear, getYearOptions } from '../../utils/reports'
 
 const AdminMonthlyReport = () => {
   const { showToast } = useToast()
   const defaults = getDefaultMonthYear()
 
-  const [employees, setEmployees] = useState([])
-  const [loadingOptions, setLoadingOptions] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [report, setReport] = useState(null)
   const [generated, setGenerated] = useState(false)
@@ -24,21 +24,17 @@ const AdminMonthlyReport = () => {
   const [year, setYear] = useState(String(defaults.year))
   const years = getYearOptions()
 
-  const loadEmployees = useCallback(async () => {
-    setLoadingOptions(true)
-    try {
-      const data = await getEmployees()
-      setEmployees(data)
-    } catch {
-      showToast('Failed to load employees', 'error')
-    } finally {
-      setLoadingOptions(false)
+  const { data: employees = [], loading: loadingOptions } = useCachedResource(
+    CACHE_KEYS.employees,
+    async () => {
+      try {
+        return await getEmployees()
+      } catch {
+        showToast('Failed to load employees', 'error')
+        throw new Error('Failed to load employees')
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadEmployees()
-  }, [loadEmployees])
+  )
 
   const handleGenerate = async () => {
     if (!employeeId || !month || !year) {

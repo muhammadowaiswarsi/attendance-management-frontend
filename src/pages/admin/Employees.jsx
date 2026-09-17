@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getDepartments } from '../../api/departments'
 import {
   createEmployee,
@@ -15,15 +15,18 @@ import EmployeeTable from '../../components/employees/EmployeeTable'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS, invalidateAfterEmployeeChange } from '../../utils/pageCache'
+
+const employeeCacheKey = (search) =>
+  search.trim() ? `${CACHE_KEYS.employees}:q:${search.trim()}` : CACHE_KEYS.employees
 
 const Employees = () => {
   const { showToast } = useToast()
-  const [employees, setEmployees] = useState([])
-  const [departments, setDepartments] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [departmentFilter, setDepartmentFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
@@ -43,28 +46,34 @@ const Employees = () => {
   const [pendingDelete, setPendingDelete] = useState(null)
   const [deleteLoadingId, setDeleteLoadingId] = useState(null)
 
-  const loadEmployees = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getEmployees(search)
-      setEmployees(data)
-    } catch {
-      showToast('Failed to load employees', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [search, showToast])
-
   useEffect(() => {
-    getDepartments().then(setDepartments).catch(() => {
-      showToast('Failed to load departments', 'error')
-    })
-  }, [showToast])
-
-  useEffect(() => {
-    const timer = setTimeout(loadEmployees, 300)
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(timer)
-  }, [loadEmployees])
+  }, [search])
+
+  const { data: employees = [], loading, reload } = useCachedResource(
+    employeeCacheKey(debouncedSearch),
+    async () => {
+      try {
+        return await getEmployees(debouncedSearch)
+      } catch {
+        showToast('Failed to load employees', 'error')
+        throw new Error('Failed to load employees')
+      }
+    }
+  )
+
+  const { data: departments = [] } = useCachedResource(
+    CACHE_KEYS.departments,
+    async () => {
+      try {
+        return await getDepartments()
+      } catch {
+        showToast('Failed to load departments', 'error')
+        throw new Error('Failed to load departments')
+      }
+    }
+  )
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -77,6 +86,11 @@ const Employees = () => {
       return matchesDept && matchesStatus
     })
   }, [employees, departmentFilter, statusFilter])
+
+  const refreshAfterChange = async () => {
+    invalidateAfterEmployeeChange()
+    await reload()
+  }
 
   const openAddModal = () => {
     setModalMode('add')
@@ -106,7 +120,7 @@ const Employees = () => {
         showToast('Employee updated successfully')
       }
       setModalOpen(false)
-      await loadEmployees()
+      await refreshAfterChange()
     } catch (err) {
       const message =
         err.response?.data?.detail ||
@@ -136,7 +150,7 @@ const Employees = () => {
           ? `${employee.fullName} deactivated`
           : `${employee.fullName} activated`
       )
-      await loadEmployees()
+      await refreshAfterChange()
     } catch {
       showToast('Failed to update employee status', 'error')
     } finally {
@@ -185,7 +199,7 @@ const Employees = () => {
         setDetailsOpen(false)
         setSelectedEmployee(null)
       }
-      await loadEmployees()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete employee'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')

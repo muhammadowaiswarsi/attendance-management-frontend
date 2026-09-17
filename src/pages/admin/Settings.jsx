@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   createPayslipField,
   deletePayslipField,
@@ -11,11 +11,11 @@ import PayslipFieldTable from '../../components/settings/PayslipFieldTable'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS, invalidateAfterPayslipFieldsChange, invalidatePageCache } from '../../utils/pageCache'
 
 const AdminSettings = () => {
   const { showToast } = useToast()
-  const [fields, setFields] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
@@ -27,21 +27,22 @@ const AdminSettings = () => {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
 
-  const loadFields = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getPayslipFields()
-      setFields(data)
-    } catch {
-      showToast('Failed to load payslip fields', 'error')
-    } finally {
-      setLoading(false)
+  const { data: fields = [], loading, reload, setCached } = useCachedResource(
+    CACHE_KEYS.payslipFields,
+    async () => {
+      try {
+        return await getPayslipFields()
+      } catch {
+        showToast('Failed to load payslip fields', 'error')
+        throw new Error('Failed to load payslip fields')
+      }
     }
-  }, [showToast])
+  )
 
-  useEffect(() => {
-    loadFields()
-  }, [loadFields])
+  const refreshAfterChange = async () => {
+    invalidateAfterPayslipFieldsChange()
+    await reload()
+  }
 
   const openAddModal = () => {
     setModalMode('add')
@@ -71,7 +72,7 @@ const AdminSettings = () => {
         showToast('Payslip field updated')
       }
       setModalOpen(false)
-      await loadFields()
+      await refreshAfterChange()
     } catch (err) {
       const message =
         err.response?.data?.detail ||
@@ -87,7 +88,7 @@ const AdminSettings = () => {
     try {
       await updatePayslipField(field.id, { isActive: !field.isActive })
       showToast(field.isActive ? `${field.name} disabled` : `${field.name} enabled`)
-      await loadFields()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to update field status'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')
@@ -102,10 +103,12 @@ const AdminSettings = () => {
     const next = [...fields]
     const [moved] = next.splice(index, 1)
     next.splice(target, 0, moved)
-    setFields(next)
+    setCached(next)
     try {
       const saved = await reorderPayslipFields(next)
-      setFields(saved)
+      setCached(saved)
+      invalidatePageCache(CACHE_KEYS.activePayslipFields)
+      invalidatePageCache(CACHE_KEYS.createPayslipForm)
     } catch (err) {
       showToast(
         typeof err.response?.data?.detail === 'string'
@@ -113,7 +116,7 @@ const AdminSettings = () => {
           : 'Failed to reorder fields',
         'error'
       )
-      await loadFields()
+      await refreshAfterChange()
     }
   }
 
@@ -125,7 +128,7 @@ const AdminSettings = () => {
       showToast('Payslip field deleted')
       setDeleteOpen(false)
       setPendingDelete(null)
-      await loadFields()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete field'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')

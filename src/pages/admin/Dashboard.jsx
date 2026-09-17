@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
 import { getAdminDashboard } from '../../api/dashboard'
 import AttendanceTable from '../../components/dashboard/AttendanceTable'
 import QuickActions from '../../components/dashboard/QuickActions'
@@ -8,41 +7,25 @@ import DashboardError from '../../components/ui/DashboardError'
 import DashboardSkeleton from '../../components/ui/DashboardSkeleton'
 import PageHeader from '../../components/ui/PageHeader'
 import { useAuth } from '../../context/AuthContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 
 const AdminDashboard = () => {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [stats, setStats] = useState(null)
-  const [attendance, setAttendance] = useState([])
-  const [activity, setActivity] = useState([])
-
-  const loadDashboard = useCallback(async () => {
-    setLoading(true)
-    setError(false)
-    try {
-      const data = await getAdminDashboard()
-      setStats(data.stats)
-      setAttendance(data.todayAttendance)
-      setActivity(data.recentActivity)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadDashboard()
-  }, [loadDashboard])
+  const { data, loading, error, reload } = useCachedResource(
+    CACHE_KEYS.adminDashboard,
+    getAdminDashboard
+  )
 
   if (loading) {
     return <DashboardSkeleton variant="admin" />
   }
 
-  if (error) {
-    return <DashboardError onRetry={loadDashboard} />
+  if (error || !data) {
+    return <DashboardError onRetry={reload} />
   }
+
+  const { stats, todayAttendance: attendance, recentActivity: activity } = data
 
   return (
     <div className="dashboard">

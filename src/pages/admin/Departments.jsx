@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   createDepartment,
   deleteDepartment,
@@ -12,13 +12,17 @@ import DepartmentFormModal from '../../components/departments/DepartmentFormModa
 import DepartmentTable from '../../components/departments/DepartmentTable'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
 import { filterDepartmentsByName } from '../../utils/departments'
+import {
+  CACHE_KEYS,
+  cachedFetch,
+  invalidateAfterDepartmentChange,
+} from '../../utils/pageCache'
 
 const Departments = () => {
   const { showToast } = useToast()
 
-  const [departments, setDepartments] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
@@ -30,29 +34,31 @@ const Departments = () => {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
 
-  const loadDepartments = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [departmentData, employeeData] = await Promise.all([
-        getDepartments(),
-        getEmployees(),
-      ])
-      setDepartments(enrichWithEmployeeCounts(departmentData, employeeData))
-    } catch {
-      showToast('Failed to load departments', 'error')
-    } finally {
-      setLoading(false)
+  const { data: departments = [], loading, reload } = useCachedResource(
+    CACHE_KEYS.departmentsPage,
+    async () => {
+      try {
+        const [departmentData, employeeData] = await Promise.all([
+          cachedFetch(CACHE_KEYS.departments, () => getDepartments()),
+          cachedFetch(CACHE_KEYS.employees, () => getEmployees()),
+        ])
+        return enrichWithEmployeeCounts(departmentData, employeeData)
+      } catch {
+        showToast('Failed to load departments', 'error')
+        throw new Error('Failed to load departments')
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadDepartments()
-  }, [loadDepartments])
+  )
 
   const filteredDepartments = useMemo(
     () => filterDepartmentsByName(departments, search),
     [departments, search]
   )
+
+  const refreshAfterChange = async () => {
+    invalidateAfterDepartmentChange()
+    await reload()
+  }
 
   const openAddModal = () => {
     setModalMode('add')
@@ -82,7 +88,7 @@ const Departments = () => {
         showToast('Department updated successfully')
       }
       setModalOpen(false)
-      await loadDepartments()
+      await refreshAfterChange()
     } catch (err) {
       const message =
         err.response?.data?.detail ||
@@ -102,7 +108,7 @@ const Departments = () => {
       showToast('Department deleted successfully')
       setDeleteOpen(false)
       setPendingDelete(null)
-      await loadDepartments()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete department'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')

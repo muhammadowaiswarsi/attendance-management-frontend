@@ -7,6 +7,7 @@ import {
   saveAuthStorage,
 } from '../utils/auth'
 import { isPublicAuthPath, setLoginInProgress } from '../utils/authSession'
+import { clearPageCache } from '../utils/pageCache'
 
 const AuthContext = createContext(null)
 
@@ -47,6 +48,7 @@ export const AuthProvider = ({ children }) => {
         if (controller.signal.aborted || isAbortError(error)) return
 
         clearAuthStorage()
+        clearPageCache()
         setUser(null)
         setToken(null)
       } finally {
@@ -68,6 +70,7 @@ export const AuthProvider = ({ children }) => {
 
     setLoginInProgress(true)
     clearAuthStorage()
+    clearPageCache()
     setUser(null)
     setToken(null)
 
@@ -103,6 +106,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     initAbortRef.current?.abort()
     clearAuthStorage()
+    clearPageCache()
     setUser(null)
     setToken(null)
   }

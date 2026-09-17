@@ -1,31 +1,28 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { downloadPayslip, getMyPayslips } from '../../api/payslips'
 import EmployeePayslipView from '../../components/payslips/EmployeePayslipView'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 
 const EmployeePayslips = () => {
   const { showToast } = useToast()
-  const [payslips, setPayslips] = useState([])
-  const [loading, setLoading] = useState(true)
   const [actionLoadingId, setActionLoadingId] = useState(null)
 
-  const loadPayslips = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getMyPayslips()
-      setPayslips(data.sort((a, b) => b.year - a.year || b.month - a.month))
-    } catch (err) {
-      const message = err.response?.data?.detail || 'Failed to load payslips'
-      showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')
-    } finally {
-      setLoading(false)
+  const { data: payslips = [], loading } = useCachedResource(
+    CACHE_KEYS.myPayslips,
+    async () => {
+      try {
+        const data = await getMyPayslips()
+        return data.sort((a, b) => b.year - a.year || b.month - a.month)
+      } catch (err) {
+        const message = err.response?.data?.detail || 'Failed to load payslips'
+        showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')
+        throw err
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadPayslips()
-  }, [loadPayslips])
+  )
 
   const handleDownload = async (payslip) => {
     setActionLoadingId(payslip.id)

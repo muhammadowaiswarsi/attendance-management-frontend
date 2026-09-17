@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getEmployees } from '../../api/employees'
 import { getActivePayslipFields } from '../../api/payslipFields'
@@ -6,40 +6,42 @@ import { createPayslip } from '../../api/payslips'
 import CreatePayslipForm from '../../components/payslips/CreatePayslipForm'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import {
+  CACHE_KEYS,
+  cachedFetch,
+  invalidateAfterPayslipChange,
+} from '../../utils/pageCache'
 
 const AdminCreatePayslip = () => {
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [employees, setEmployees] = useState([])
-  const [fields, setFields] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    Promise.all([getEmployees(), getActivePayslipFields()])
-      .then(([employeeRows, fieldRows]) => {
-        if (cancelled) return
-        setEmployees(employeeRows)
-        setFields(fieldRows)
-      })
-      .catch(() => {
-        if (cancelled) return
+  const { data, loading } = useCachedResource(
+    CACHE_KEYS.createPayslipForm,
+    async () => {
+      try {
+        const [employeeRows, fieldRows] = await Promise.all([
+          cachedFetch(CACHE_KEYS.employees, () => getEmployees()),
+          cachedFetch(CACHE_KEYS.activePayslipFields, () => getActivePayslipFields()),
+        ])
+        return { employees: employeeRows, fields: fieldRows }
+      } catch {
         showToast('Failed to load payslip form', 'error')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+        throw new Error('Failed to load payslip form')
+      }
     }
-  }, [showToast])
+  )
+
+  const employees = data?.employees || []
+  const fields = data?.fields || []
 
   const handleSubmit = async (form) => {
     setSubmitting(true)
     try {
       const payslip = await createPayslip(form)
+      invalidateAfterPayslipChange()
       showToast('Payslip created successfully')
       navigate(`/admin/payslips/${payslip.id}`)
     } catch (err) {

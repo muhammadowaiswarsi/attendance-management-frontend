@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getDepartments } from '../../api/departments'
 import { getDepartmentReport } from '../../api/reports'
@@ -7,14 +7,14 @@ import ReportFilters from '../../components/reports/ReportFilters'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 import { getDefaultMonthYear, getYearOptions } from '../../utils/reports'
 
 const AdminDepartmentReport = () => {
   const { showToast } = useToast()
   const defaults = getDefaultMonthYear()
 
-  const [departments, setDepartments] = useState([])
-  const [loadingOptions, setLoadingOptions] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [report, setReport] = useState(null)
   const [generated, setGenerated] = useState(false)
@@ -24,21 +24,17 @@ const AdminDepartmentReport = () => {
   const [year, setYear] = useState(String(defaults.year))
   const years = getYearOptions()
 
-  const loadDepartments = useCallback(async () => {
-    setLoadingOptions(true)
-    try {
-      const data = await getDepartments()
-      setDepartments(data)
-    } catch {
-      showToast('Failed to load departments', 'error')
-    } finally {
-      setLoadingOptions(false)
+  const { data: departments = [], loading: loadingOptions } = useCachedResource(
+    CACHE_KEYS.departments,
+    async () => {
+      try {
+        return await getDepartments()
+      } catch {
+        showToast('Failed to load departments', 'error')
+        throw new Error('Failed to load departments')
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadDepartments()
-  }, [loadDepartments])
+  )
 
   const handleGenerate = async () => {
     if (!departmentId || !month || !year) {

@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
 import { getEmployeeReports } from '../../api/reports'
 import AttendanceProgress from '../../components/reports/AttendanceProgress'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
 import PageHeader from '../../components/ui/PageHeader'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { formatPercentage } from '../../utils/reports'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 import { MONTH_NAMES } from '../../utils/payslips'
+import { formatPercentage } from '../../utils/reports'
 
 const summaryItems = [
   { key: 'presentDays', label: 'Present Days', icon: '✅', accent: 'success' },
@@ -18,28 +19,21 @@ const EmployeeReports = () => {
   const { user } = useAuth()
   const { showToast } = useToast()
 
-  const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState(null)
-  const [history, setHistory] = useState([])
+  const { data, loading } = useCachedResource(
+    user?.email ? CACHE_KEYS.employeeReports(user.email) : 'employee-reports',
+    async () => {
+      try {
+        return await getEmployeeReports(user.email)
+      } catch {
+        showToast('Failed to load your reports', 'error')
+        throw new Error('Failed to load your reports')
+      }
+    },
+    { enabled: Boolean(user?.email) }
+  )
 
-  const loadReports = useCallback(async () => {
-    if (!user?.email) return
-
-    setLoading(true)
-    try {
-      const data = await getEmployeeReports(user.email)
-      setSummary(data.summary)
-      setHistory(data.history)
-    } catch {
-      showToast('Failed to load your reports', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [user?.email, showToast])
-
-  useEffect(() => {
-    loadReports()
-  }, [loadReports])
+  const summary = data?.summary || null
+  const history = data?.history || []
 
   if (loading) {
     return <LoadingSpinner fullPage />

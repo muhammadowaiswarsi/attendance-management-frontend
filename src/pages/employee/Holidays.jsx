@@ -1,34 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getHolidays } from '../../api/holidays'
 import HolidayTable from '../../components/holidays/HolidayTable'
 import UpcomingHolidays from '../../components/holidays/UpcomingHolidays'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
 import { getUpcomingHolidays, getYearOptions, sortHolidaysByDate } from '../../utils/holidays'
+import { CACHE_KEYS } from '../../utils/pageCache'
 
 const EmployeeHolidays = () => {
   const { showToast } = useToast()
   const yearOptions = getYearOptions()
-
-  const [holidays, setHolidays] = useState([])
-  const [loading, setLoading] = useState(true)
   const [year, setYear] = useState(String(new Date().getFullYear()))
 
-  const loadHolidays = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getHolidays(Number(year))
-      setHolidays(sortHolidaysByDate(data))
-    } catch {
-      showToast('Failed to load holidays', 'error')
-    } finally {
-      setLoading(false)
+  const { data: holidays = [], loading } = useCachedResource(
+    CACHE_KEYS.holidays(year),
+    async () => {
+      try {
+        const data = await getHolidays(Number(year))
+        return sortHolidaysByDate(data)
+      } catch {
+        showToast('Failed to load holidays', 'error')
+        throw new Error('Failed to load holidays')
+      }
     }
-  }, [year, showToast])
-
-  useEffect(() => {
-    loadHolidays()
-  }, [loadHolidays])
+  )
 
   const upcomingHolidays = useMemo(() => getUpcomingHolidays(holidays), [holidays])
 

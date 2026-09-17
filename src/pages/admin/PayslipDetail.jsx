@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getEmployees } from '../../api/employees'
 import {
@@ -10,35 +10,35 @@ import {
 import PayslipDetails from '../../components/payslips/PayslipDetails'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import {
+  CACHE_KEYS,
+  cachedFetch,
+  invalidateAfterPayslipChange,
+} from '../../utils/pageCache'
 import { formatPeriod } from '../../utils/payslips'
 
 const AdminPayslipDetail = () => {
   const { id } = useParams()
   const { showToast } = useToast()
-  const [payslip, setPayslip] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [emailConfirm, setEmailConfirm] = useState(false)
 
-  const loadPayslip = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [data, employees] = await Promise.all([
-        getPayslipById(id),
-        getEmployees(),
-      ])
-      setPayslip(enrichWithEmployees([data], employees)[0])
-    } catch {
-      showToast('Failed to load payslip', 'error')
-      setPayslip(null)
-    } finally {
-      setLoading(false)
+  const { data: payslip, loading, reload } = useCachedResource(
+    CACHE_KEYS.payslip(id),
+    async () => {
+      try {
+        const [data, employees] = await Promise.all([
+          getPayslipById(id),
+          cachedFetch(CACHE_KEYS.employees, () => getEmployees()),
+        ])
+        return enrichWithEmployees([data], employees)[0]
+      } catch {
+        showToast('Failed to load payslip', 'error')
+        throw new Error('Failed to load payslip')
+      }
     }
-  }, [id, showToast])
-
-  useEffect(() => {
-    loadPayslip()
-  }, [loadPayslip])
+  )
 
   const handleDownload = async (p) => {
     setActionLoading(true)
@@ -63,7 +63,8 @@ const AdminPayslipDetail = () => {
     try {
       await sendPayslipEmail(payslip.id)
       showToast(`Payslip sent to ${payslip.employeeName}`)
-      await loadPayslip()
+      invalidateAfterPayslipChange()
+      await reload()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to send email'
       showToast(typeof message === 'string' ? message : 'Email failed', 'error')

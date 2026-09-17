@@ -1,33 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { downloadPayslip, getMyPayslips } from '../../api/payslips'
 import PayslipDetails from '../../components/payslips/PayslipDetails'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 
 const EmployeePayslipDetail = () => {
   const { id } = useParams()
   const { showToast } = useToast()
-  const [payslip, setPayslip] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
 
-  const loadPayslip = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getMyPayslips()
-      const found = data.find((p) => String(p.id) === String(id))
-      setPayslip(found || null)
-    } catch {
-      showToast('Failed to load payslip', 'error')
-      setPayslip(null)
-    } finally {
-      setLoading(false)
+  const { data: payslips = [], loading } = useCachedResource(
+    CACHE_KEYS.myPayslips,
+    async () => {
+      try {
+        const data = await getMyPayslips()
+        return data.sort((a, b) => b.year - a.year || b.month - a.month)
+      } catch {
+        showToast('Failed to load payslip', 'error')
+        throw new Error('Failed to load payslip')
+      }
     }
-  }, [id, showToast])
+  )
 
-  useEffect(() => {
-    loadPayslip()
-  }, [loadPayslip])
+  const payslip = payslips.find((p) => String(p.id) === String(id)) || null
 
   const handleDownload = async (p) => {
     setActionLoading(true)

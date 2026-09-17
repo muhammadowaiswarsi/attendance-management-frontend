@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
 import { getEmployeeDashboard } from '../../api/employee'
 import AttendanceSummary from '../../components/employee/AttendanceSummary'
 import PayslipPreview from '../../components/employee/PayslipPreview'
@@ -9,45 +8,31 @@ import DashboardError from '../../components/ui/DashboardError'
 import DashboardSkeleton from '../../components/ui/DashboardSkeleton'
 import PageHeader from '../../components/ui/PageHeader'
 import { useAuth } from '../../context/AuthContext'
+import useCachedResource from '../../hooks/useCachedResource'
+import { CACHE_KEYS } from '../../utils/pageCache'
 
 const EmployeeDashboard = () => {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [profile, setProfile] = useState(null)
-  const [attendanceSummary, setAttendanceSummary] = useState(null)
-  const [recentAttendance, setRecentAttendance] = useState([])
-  const [payslips, setPayslips] = useState([])
-  const [quickInfo, setQuickInfo] = useState(null)
-
-  const loadDashboard = useCallback(async () => {
-    setLoading(true)
-    setError(false)
-    try {
-      const data = await getEmployeeDashboard()
-      setProfile(data.profile)
-      setAttendanceSummary(data.attendanceSummary)
-      setRecentAttendance(data.recentAttendance)
-      setPayslips(data.payslips)
-      setQuickInfo(data.quickInfo)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadDashboard()
-  }, [loadDashboard])
+  const { data, loading, error, reload } = useCachedResource(
+    CACHE_KEYS.employeeDashboard,
+    getEmployeeDashboard
+  )
 
   if (loading) {
     return <DashboardSkeleton variant="employee" />
   }
 
-  if (error) {
-    return <DashboardError onRetry={loadDashboard} />
+  if (error || !data) {
+    return <DashboardError onRetry={reload} />
   }
+
+  const {
+    profile,
+    attendanceSummary,
+    recentAttendance,
+    payslips,
+    quickInfo,
+  } = data
 
   return (
     <div className="dashboard employee-dashboard">

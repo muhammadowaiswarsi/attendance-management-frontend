@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   deleteAttendance,
@@ -15,7 +15,13 @@ import MarkAttendanceModal from '../../components/attendance/MarkAttendanceModal
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PageHeader from '../../components/ui/PageHeader'
 import { useToast } from '../../context/ToastContext'
+import useCachedResource from '../../hooks/useCachedResource'
 import { paginate, todayISO } from '../../utils/attendance'
+import {
+  CACHE_KEYS,
+  cachedFetch,
+  invalidateAfterAttendanceChange,
+} from '../../utils/pageCache'
 
 const PAGE_SIZE = 10
 
@@ -27,37 +33,35 @@ const AdminAttendance = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
 
-  const [records, setRecords] = useState([])
-  const [employees, setEmployees] = useState([])
-  const [departments, setDepartments] = useState([])
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-
   const [markOpen, setMarkOpen] = useState(false)
   const [editRecord, setEditRecord] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [attendanceData, employeeData, deptData] = await Promise.all([
-        getAttendance(date),
-        getEmployees(),
-        getDepartments(),
-      ])
-      setEmployees(employeeData)
-      setDepartments(deptData)
-      setRecords(enrichWithEmployees(attendanceData, employeeData))
-    } catch {
-      showToast('Failed to load attendance', 'error')
-    } finally {
-      setLoading(false)
+  const { data, loading, reload } = useCachedResource(
+    CACHE_KEYS.attendance(date),
+    async () => {
+      try {
+        const [attendanceData, employeeData, deptData] = await Promise.all([
+          getAttendance(date),
+          cachedFetch(CACHE_KEYS.employees, () => getEmployees()),
+          cachedFetch(CACHE_KEYS.departments, () => getDepartments()),
+        ])
+        return {
+          records: enrichWithEmployees(attendanceData, employeeData),
+          employees: employeeData,
+          departments: deptData,
+        }
+      } catch {
+        showToast('Failed to load attendance', 'error')
+        throw new Error('Failed to load attendance')
+      }
     }
-  }, [date, showToast])
+  )
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  const records = data?.records || []
+  const employees = data?.employees || []
+  const departments = data?.departments || []
 
   useEffect(() => {
     setPage(1)
@@ -82,6 +86,11 @@ const AdminAttendance = () => {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
+  const refreshAfterChange = async () => {
+    invalidateAfterAttendanceChange()
+    await reload()
+  }
+
   const handleMarkSubmit = async (form) => {
     setSubmitting(true)
     try {
@@ -102,7 +111,7 @@ const AdminAttendance = () => {
       }
       setMarkOpen(false)
       setEditRecord(null)
-      await loadData()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to save attendance'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')
@@ -117,7 +126,7 @@ const AdminAttendance = () => {
       await deleteAttendance(deleteConfirm.id)
       showToast('Attendance record deleted')
       setDeleteConfirm(null)
-      await loadData()
+      await refreshAfterChange()
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to delete record'
       showToast(typeof message === 'string' ? message : 'Something went wrong', 'error')

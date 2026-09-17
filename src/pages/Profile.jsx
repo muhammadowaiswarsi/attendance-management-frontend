@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { changePassword, getProfile, updateProfile } from '../api/profile'
 import ChangePasswordModal from '../components/profile/ChangePasswordModal'
 import EditProfileModal from '../components/profile/EditProfileModal'
@@ -6,38 +6,34 @@ import ProfileCard from '../components/profile/ProfileCard'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import PageHeader from '../components/ui/PageHeader'
 import { useToast } from '../context/ToastContext'
+import useCachedResource from '../hooks/useCachedResource'
+import { CACHE_KEYS, invalidateAfterProfileChange } from '../utils/pageCache'
 
 const Profile = () => {
   const { showToast } = useToast()
-
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
 
-  const loadProfile = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getProfile()
-      setProfile(data)
-    } catch {
-      showToast('Failed to load profile', 'error')
-    } finally {
-      setLoading(false)
+  const { data: profile, loading, setCached } = useCachedResource(
+    CACHE_KEYS.profile,
+    async () => {
+      try {
+        return await getProfile()
+      } catch {
+        showToast('Failed to load profile', 'error')
+        throw new Error('Failed to load profile')
+      }
     }
-  }, [showToast])
-
-  useEffect(() => {
-    loadProfile()
-  }, [loadProfile])
+  )
 
   const handleProfileUpdate = async (form) => {
     setSavingProfile(true)
     try {
       const data = await updateProfile(form)
-      setProfile(data)
+      setCached(data)
+      invalidateAfterProfileChange()
       setEditOpen(false)
       showToast('Profile updated successfully')
     } catch (err) {
