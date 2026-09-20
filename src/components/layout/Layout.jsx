@@ -19,7 +19,12 @@ const Layout = () => {
 
   return (
     <div className={`app-layout ${collapsed ? 'app-layout--collapsed' : ''}`}>
-      <Sidebar role={role} collapsed={collapsed} mobileOpen={mobileOpen} />
+      <Sidebar
+        role={role}
+        collapsed={collapsed}
+        mobileOpen={mobileOpen}
+        onNavigate={() => setMobileOpen(false)}
+      />
 
       {mobileOpen && (
         <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />

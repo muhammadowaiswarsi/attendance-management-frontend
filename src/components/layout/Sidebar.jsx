@@ -22,7 +22,7 @@ const employeeLinks = [
   { to: '/employee/profile', label: 'Profile', icon: '👤' },
 ]
 
-const Sidebar = ({ role, collapsed, mobileOpen }) => {
+const Sidebar = ({ role, collapsed, mobileOpen, onNavigate }) => {
   const links = role === 'admin' ? adminLinks : employeeLinks
 
   return (
@@ -41,6 +41,7 @@ const Sidebar = ({ role, collapsed, mobileOpen }) => {
           <NavLink
             key={link.to}
             to={link.to}
+            onClick={onNavigate}
             className={({ isActive }) =>
               `sidebar__link ${isActive ? 'sidebar__link--active' : ''}`
             }
